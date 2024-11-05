@@ -444,7 +444,7 @@ switch ($PSCmdlet.ParameterSetName) {
         #endregion AD Groups
 
         #region AD Users
-        $Users = Import-CSv -Path "$PSScriptRoot\Users.csv" -Delimiter ',' -Encoding utf8
+        $Users = Import-Csv -Path "$PSScriptRoot\Users.csv" -Delimiter ',' -Encoding utf8
         foreach ($user in $Users) {
             $NewUser101 = @{
                 SamAccountName       = $user.UserName
@@ -462,19 +462,19 @@ switch ($PSCmdlet.ParameterSetName) {
             }
             New-ADUser @NewUser101
                         
-            Add-ADGroupMember -Members $user.UserName -Identity $identity
+            Add-ADGroupMember -Members $user.UserName -Identity $user.Groups
         }
         #endregion AD Users
 
         #region AD Groups based on AD Users
         #Security Groups
         $Users.Department | Get-Unique | ForEach-Object -Process {
-            New-ADGroup -Name $_ -GroupCategory Security -GroupScope DomainLocal -Path "OU=Groups,OU=Marvel,$DomainDN"
+            New-ADGroup -Name $_ -GroupCategory Security -GroupScope Global -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
         }
 
         #Distribution Lists
         $Users.Province | Get-Unique | ForEach-Object -Process {
-            New-ADGroup -Name $_ -GroupCategory Distribution -GroupScope DomainLocal -Path "OU=Groups,OU=Marvel,$DomainDN"
+            New-ADGroup -Name $_ -GroupCategory Distribution -GroupScope Global -Path "OU=Distribution,OU=Groups,OU=Marvel,$DomainDN"
         }
         #endregion AD Groups based on AD Users
     }
