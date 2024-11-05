@@ -468,13 +468,15 @@ switch ($PSCmdlet.ParameterSetName) {
 
         #region AD Groups based on AD Users
         #Security Groups
-        $Users.Department | Get-Unique | ForEach-Object -Process {
-            New-ADGroup -Name $_ -GroupCategory Security -GroupScope Global -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
+        $Users | Group-Object -Property Department | ForEach-Object -Process {
+            New-ADGroup -Name "GG-$($_.Name)" -GroupCategory Security -GroupScope Global -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
+            Add-ADGroupMember -Identity "GG-$($_.Name)" -Members @($_.Group.UserName)
         }
 
         #Distribution Lists
-        $Users.Province | Get-Unique | ForEach-Object -Process {
-            New-ADGroup -Name $_ -GroupCategory Distribution -GroupScope Global -Path "OU=Distribution,OU=Groups,OU=Marvel,$DomainDN"
+        $Users | Group-Object -Property Province | ForEach-Object -Process {
+            New-ADGroup -Name "DG-$($_.Name)" -GroupCategory Distribution -GroupScope Global -Path "OU=Distribution,OU=Groups,OU=Marvel,$DomainDN"
+            Add-ADGroupMember -Identity "DG-$($_.Name)" -Members @($_.Group.UserName)
         }
         #endregion AD Groups based on AD Users
     }
