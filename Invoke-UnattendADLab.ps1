@@ -287,6 +287,55 @@ Function Write-LogEntry {
          }
     }
 }
+Function Repair-NlaSvcOnDC {
+    <#
+        .SYNOPSIS
+        Fix Network Profile issue detected as public on DC.
+
+        .DESCRIPTION
+        When a DC starts, the NLASVC service is not properly detecting the network profile as Domain and fallback to the Public one.
+        This script operate a change to the Network Location Awareness services to ensure that detection will works as expected.
+
+        .NOTES
+        Version 1.0.1
+        Updated by: Thomas PRUD'HOMME
+        Orginal Author: Bastien PEREZ 
+    #>
+    $ServiceName = 'nlasvc'
+    $DesiredDependencies = @('DNS')
+
+    #Test if dependency exist
+    foreach ($dependency in $DesiredDependencies) {
+        if (-not (Get-Service $dependency -ErrorAction 'SilentlyContinue')) {
+            return
+        }
+    }
+
+    #Fetch current dependencies from the registry
+    $CurrentDependencies = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name 'DependOnService' -ErrorAction 'SilentlyContinue' | Select-Object -ExpandProperty 'DependOnService'
+
+    #Convert current dependencies to an array if they exist
+    if ($null -eq $CurrentDependencies) {
+        $CurrentDependencies = @()
+    } elseif (-not ($CurrentDependencies -is [Array])) {
+        $CurrentDependencies = @($CurrentDependencies)
+    }
+
+    #Determine which dependencies are missing
+    $MissingDependencies = $DesiredDependencies | Where-Object -FilterScript {$_ -notin $CurrentDependencies}
+
+    #If there are any missing dependencies, add them
+    if ($MissingDependencies.Count -gt 0) {
+        $TargetDependencies = $CurrentDependencies + $MissingDependencies
+        try {
+            $null = Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name 'DependOnService' -Value $($TargetDependencies | Out-String)
+            return 'Success'
+        }
+        catch {
+            throw $_
+        }
+    }
+}
 #endregion Functions
 
 switch ($PSCmdlet.ParameterSetName) {
@@ -429,6 +478,9 @@ switch ($PSCmdlet.ParameterSetName) {
         }
         #endregion Cleanup previous step Scheduled Task
 
+        #Fix NLA/DNS detection issue
+        Repair-NlaSvcOnDC
+
         #region Organizational Units
         $DomainDN = Get-ADDomain | Select-Object -ExpandProperty DistinguishedName
         New-ADOrganizationalUnit -Name 'Marvel' -Path $DomainDN
@@ -440,7 +492,9 @@ switch ($PSCmdlet.ParameterSetName) {
         #endregion Organizational Units
 
         #region AD Groups
-        New-ADGroup -Name 'Marvel-LocalAdmins' -GroupScope Global -GroupCategory Security -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
+        New-ADGroup -Name 'GG-MarvelLocalAdmins' -GroupScope Global -GroupCategory Security -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
+        New-ADGroup -Name 'LG-MarvelLocalAdmins' -GroupScope DomainLocal -GroupCategory Security -Path "OU=Security,OU=Groups,OU=Marvel,$DomainDN"
+        Add-ADGroupMember -Identity 'LG-MarvelLocalAdmins' -Members 'GG-MarvelLocalAdmins'
         #endregion AD Groups
 
         #region AD Users
